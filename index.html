@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOR 跨链 · Mantle ⇄ Base</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0d0f12; --panel:#15181d; --panel2:#1b1f26; --line:#262b34;
+    --text:#e8eaed; --muted:#8a919c; --accent:#5ee0b5; --accent-ink:#06261b;
+    --warn:#f5b947; --err:#ff6b6b; --ok:#5ee0b5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.5}
+  .wrap{max-width:520px;margin:0 auto;padding:28px 16px 60px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  h1{font-size:18px;font-weight:700;margin:0;letter-spacing:-.01em}
+  h1 span{color:var(--muted);font-weight:500}
+  .btn{border:0;border-radius:10px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;transition:opacity .15s,transform .05s}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn-primary{background:var(--accent);color:var(--accent-ink)}
+  .btn-ghost{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
+  .btn-big{width:100%;padding:14px;font-size:15px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+  .chainbox{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .lbl{color:var(--muted);font-size:12px}
+  .chain{display:flex;align-items:center;gap:8px;font-weight:600}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .amt{width:100%;background:transparent;border:0;outline:0;color:var(--text);font:600 26px Inter,sans-serif;padding:6px 0 2px}
+  .amt::placeholder{color:#4a515c}
+  .max{background:transparent;border:1px solid var(--line);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer}
+  .flip{display:flex;justify-content:center;margin:-8px 0;position:relative;z-index:1}
+  .flip button{width:36px;height:36px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--text);cursor:pointer;font-size:16px}
+  .txt{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);font:12px "JetBrains Mono",monospace;padding:9px 10px;outline:0}
+  .txt:focus{border-color:#3a4250}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;font-size:13px}
+  .kv b{font-weight:500}
+  .mono{font-family:"JetBrains Mono",monospace;font-size:12px}
+  .muted{color:var(--muted)}
+  .sp{height:12px}
+  .status{margin-top:12px;border-radius:10px;padding:10px 12px;font-size:13px;display:none;word-break:break-all}
+  .status.show{display:block}
+  .status.info{background:#16222b;border:1px solid #23394a}
+  .status.ok{background:#102620;border:1px solid #1d4a3b}
+  .status.err{background:#2a1616;border:1px solid #4a2424;color:#ffc9c9}
+  a{color:var(--accent)}
+  details{margin-top:16px;color:var(--muted);font-size:12px}
+  details summary{cursor:pointer}
+  details .mono{color:var(--text)}
+  .note{font-size:12px;color:var(--muted);margin-top:14px}
+  .pill{font-size:11px;padding:2px 8px;border-radius:99px;background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+  .hist{margin-top:16px}
+  .hist .item{padding:8px 0;border-top:1px solid var(--line);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>KOR 跨链 <span>· LayerZero OFT</span></h1>
+    <button id="connectBtn" class="btn btn-ghost">连接钱包</button>
+  </header>
+
+  <div class="card">
+    <div class="chainbox">
+      <div class="row"><span class="lbl">从</span><span class="lbl" id="balLbl">余额：—</span></div>
+      <div class="row" style="margin-top:4px">
+        <div class="chain"><span class="dot" id="srcDot"></span><span id="srcName"></span></div>
+        <button class="max" id="maxBtn">最大</button>
+      </div>
+      <input id="amount" class="amt" inputmode="decimal" placeholder="0" autocomplete="off">
+      <div class="lbl">KOR</div>
+    </div>
+
+    <div class="flip"><button id="flipBtn" title="切换方向">⇅</button></div>
+
+    <div class="chainbox">
+      <div class="row"><span class="lbl">到</span><span class="pill">1:1 到账</span></div>
+      <div class="chain" style="margin-top:4px"><span class="dot" id="dstDot"></span><span id="dstName"></span></div>
+      <div class="sp"></div>
+      <div class="lbl" style="margin-bottom:4px">收款地址（默认为当前钱包）</div>
+      <input id="recipient" class="txt" placeholder="0x..." autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="sp"></div>
+    <div class="kv"><span class="muted">跨链费（LayerZero）</span><b id="feeVal">—</b></div>
+    <div class="kv"><span class="muted">预计到账</span><b id="recvVal">—</b></div>
+    <div class="kv"><span class="muted">预计时间</span><b>约 1–5 分钟</b></div>
+    <div class="sp"></div>
+
+    <button id="actionBtn" class="btn btn-primary btn-big" disabled>连接钱包</button>
+    <div id="status" class="status"></div>
+
+    <div class="hist" id="hist"></div>
+  </div>
+
+  <details>
+    <summary>合约地址（可自行在浏览器核对）</summary>
+    <div style="margin-top:8px">
+      Mantle KorOFT：<a class="mono" target="_blank" rel="noopener" href="https://mantlescan.xyz/address/0x4dc985bb2043a7eCBefF2a281351862A012FF1FC#code">0x4dc985bb2043a7eCBefF2a281351862A012FF1FC</a><br>
+      Base OFT Adapter：<a class="mono" target="_blank" rel="noopener" href="https://basescan.org/address/0x6aeda6dbbb3f0e7313bc82144c904cb82ee64fe8#code">0x6aeda6dbbb3f0e7313bc82144c904cb82ee64fe8</a><br>
+      Base KOR：<a class="mono" target="_blank" rel="noopener" href="https://basescan.org/token/0xD3679306360705ba3580BC4130b56460FB4e6926">0xD3679306360705ba3580BC4130b56460FB4e6926</a><br>
+      LayerZero EID：Mantle 30181 · Base 30184
+    </div>
+  </details>
+  <p class="note">非 KOR 官方页面。直接调用 KOR 部署的 LayerZero OFT 合约，交易全部由你的钱包签名，本页不保存任何数据。建议先小额测试。</p>
+</div>
+
+<script>
+const { ethers } = window;
+
+const CHAINS = {
+  mantle: { id: 5000, hex: '0x1388', name: 'Mantle', eid: 30181, color: '#6ee7c7',
+    native: 'MNT', rpc: 'https://rpc.mantle.xyz', explorer: 'https://mantlescan.xyz',
+    oft: '0x4dc985bb2043a7eCBefF2a281351862A012FF1FC', token: '0x4dc985bb2043a7eCBefF2a281351862A012FF1FC', needsApprove: false },
+  base:   { id: 8453, hex: '0x2105', name: 'Base', eid: 30184, color: '#4c7dff',
+    native: 'ETH', rpc: 'https://mainnet.base.org', explorer: 'https://basescan.org',
+    oft: '0x6aeda6dbbb3f0e7313bc82144c904cb82ee64fe8', token: '0xD3679306360705ba3580BC4130b56460FB4e6926', needsApprove: true },
+};
+
+const OFT_ABI = [
+  'function quoteSend((uint32 dstEid,bytes32 to,uint256 amountLD,uint256 minAmountLD,bytes extraOptions,bytes composeMsg,bytes oftCmd) _sendParam,bool _payInLzToken) view returns ((uint256 nativeFee,uint256 lzTokenFee))',
+  'function send((uint32 dstEid,bytes32 to,uint256 amountLD,uint256 minAmountLD,bytes extraOptions,bytes composeMsg,bytes oftCmd) _sendParam,(uint256 nativeFee,uint256 lzTokenFee) _fee,address _refundAddress) payable returns ((bytes32 guid,uint64 nonce,(uint256 nativeFee,uint256 lzTokenFee) fee),(uint256 amountSentLD,uint256 amountReceivedLD))',
+  'function decimalConversionRate() view returns (uint256)',
+];
+const ERC20_ABI = [
+  'function balanceOf(address) view returns (uint256)',
+  'function allowance(address,address) view returns (uint256)',
+  'function approve(address,uint256) returns (bool)',
+];
+
+let dir = 'mantle'; // source chain key
+let provider, signer, account, chainId;
+let balance = 0n, allowance = 0n, fee = null, rate = 10n ** 12n;
+let busy = false, quoteTimer = null;
+
+const $ = id => document.getElementById(id);
+const src = () => CHAINS[dir];
+const dst = () => CHAINS[dir === 'mantle' ? 'base' : 'mantle'];
+
+function setStatus(type, html) {
+  const s = $('status');
+  s.className = 'status show ' + type;
+  s.innerHTML = html;
+}
+function clearStatus() { $('status').className = 'status'; }
+
+function fmt(v, dp = 4) {
+  const s = ethers.formatUnits(v, 18);
+  const [i, d = ''] = s.split('.');
+  const di = Number(i).toLocaleString('en-US');
+  const dd = d.replace(/0+$/, '').slice(0, dp);
+  return dd ? `${di}.${dd}` : di;
+}
+
+function parseAmount() {
+  const raw = $('amount').value.trim().replace(/,/g, '');
+  if (!raw) return 0n;
+  try {
+    const v = ethers.parseUnits(raw, 18);
+    return (v / rate) * rate; // strip dust below shared decimals
+  } catch { return null; }
+}
+
+function recipientBytes32() {
+  const r = $('recipient').value.trim() || account;
+  if (!r || !ethers.isAddress(r)) return null;
+  return ethers.zeroPadValue(ethers.getAddress(r), 32);
+}
+
+function sendParam(amount) {
+  return { dstEid: dst().eid, to: recipientBytes32(), amountLD: amount, minAmountLD: amount,
+           extraOptions: '0x', composeMsg: '0x', oftCmd: '0x' };
+}
+
+function renderChains() {
+  $('srcName').textContent = src().name;
+  $('dstName').textContent = dst().name;
+  $('srcDot').style.background = src().color;
+  $('dstDot').style.background = dst().color;
+}
+
+function errMsg(e) {
+  const m = e?.shortMessage || e?.info?.error?.message || e?.reason || e?.message || String(e);
+  if (/user rejected|denied|ACTION_REJECTED/i.test(m)) return '你在钱包里取消了操作。';
+  if (/NotEnoughNative/i.test(m)) return '附带的手续费和报价对不上，请重试（会自动重新报价）。';
+  if (/insufficient funds/i.test(m)) return `钱包里的 ${src().native} 不够付手续费和 gas。`;
+  if (/SlippageExceeded/i.test(m)) return '数量精度问题，请用更少的小数位。';
+  return m.slice(0, 300);
+}
+
+async function updateButton() {
+  const b = $('actionBtn');
+  const amount = parseAmount();
+  b.disabled = true;
+  if (!window.ethereum) { b.textContent = '未检测到钱包'; return; }
+  if (!account) { b.textContent = '连接钱包'; b.disabled = false; return; }
+  if (chainId !== src().id) { b.textContent = `切换到 ${src().name}`; b.disabled = false; return; }
+  if (busy) return;
+  if (amount === null) { b.textContent = '数量格式不对'; return; }
+  if (amount === 0n) { b.textContent = '输入数量'; return; }
+  if (!recipientBytes32()) { b.textContent = '收款地址无效'; return; }
+  if (amount > balance) { b.textContent = 'KOR 余额不足'; return; }
+  if (src().needsApprove && allowance < amount) { b.textContent = '第 1 步：授权 KOR'; b.disabled = false; return; }
+  if (!fee) { b.textContent = '正在报价…'; return; }
+  b.textContent = `跨链到 ${dst().name}`;
+  b.disabled = false;
+}
+
+async function refresh() {
+  renderChains();
+  $('balLbl').textContent = '余额：—';
+  if (!account || chainId !== src().id) { fee = null; renderFee(); updateButton(); return; }
+  try {
+    const token = new ethers.Contract(src().token, ERC20_ABI, provider);
+    const oft = new ethers.Contract(src().oft, OFT_ABI, provider);
+    const [bal, r] = await Promise.all([token.balanceOf(account), oft.decimalConversionRate().catch(() => rate)]);
+    balance = bal; rate = r;
+    allowance = src().needsApprove ? await token.allowance(account, src().oft) : ethers.MaxUint256;
+    $('balLbl').textContent = '余额：' + fmt(balance);
+  } catch (e) { setStatus('err', '读取余额失败：' + errMsg(e)); }
+  scheduleQuote(0);
+}
+
+function renderFee() {
+  const amount = parseAmount();
+  $('feeVal').textContent = fee ? `${fmt(fee.nativeFee, 6)} ${src().native}` : '—';
+  $('recvVal').textContent = amount ? `${fmt(amount)} KOR` : '—';
+}
+
+function scheduleQuote(ms = 400) {
+  clearTimeout(quoteTimer);
+  fee = null; renderFee(); updateButton();
+  quoteTimer = setTimeout(quote, ms);
+}
+
+async function quote() {
+  const amount = parseAmount();
+  if (!account || chainId !== src().id || !amount || !recipientBytes32()) { renderFee(); updateButton(); return null; }
+  try {
+    const oft = new ethers.Contract(src().oft, OFT_ABI, provider);
+    const q = await oft.quoteSend(sendParam(amount), false);
+    fee = { nativeFee: q.nativeFee ?? q[0], lzTokenFee: 0n };
+  } catch (e) {
+    fee = null;
+    setStatus('err', '报价失败：' + errMsg(e));
+  }
+  renderFee(); updateButton();
+  return fee;
+}
+
+async function connect() {
+  if (!window.ethereum) {
+    setStatus('err', '没有检测到浏览器钱包。请安装 MetaMask / Rabby 等插件，并在浏览器新标签页里直接打开本页面。');
+    return;
+  }
+  try {
+    provider = new ethers.BrowserProvider(window.ethereum, 'any');
+    const accs = await provider.send('eth_requestAccounts', []);
+    account = ethers.getAddress(accs[0]);
+    signer = await provider.getSigner();
+    chainId = Number((await provider.getNetwork()).chainId);
+    $('connectBtn').textContent = account.slice(0, 6) + '…' + account.slice(-4);
+    if (!$('recipient').value) $('recipient').placeholder = account + '（当前钱包）';
+    clearStatus();
+    await refresh();
+  } catch (e) { setStatus('err', '连接失败：' + errMsg(e)); }
+}
+
+async function switchChain() {
+  const c = src();
+  try {
+    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: c.hex }] });
+  } catch (e) {
+    if (e.code === 4902 || /Unrecognized chain/i.test(e.message || '')) {
+      await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [{
+        chainId: c.hex, chainName: c.name, rpcUrls: [c.rpc], blockExplorerUrls: [c.explorer],
+        nativeCurrency: { name: c.native, symbol: c.native, decimals: 18 } }] });
+    } else { setStatus('err', '切换网络失败：' + errMsg(e)); return; }
+  }
+  await onChainChanged();
+}
+
+async function onChainChanged() {
+  if (!window.ethereum) return;
+  provider = new ethers.BrowserProvider(window.ethereum, 'any');
+  chainId = Number((await provider.getNetwork()).chainId);
+  if (account) signer = await provider.getSigner();
+  await refresh();
+}
+
+async function approve() {
+  const amount = parseAmount();
+  busy = true; $('actionBtn').disabled = true; $('actionBtn').textContent = '授权中…';
+  try {
+    const token = new ethers.Contract(src().token, ERC20_ABI, signer);
+    const tx = await token.approve(src().oft, amount);
+    setStatus('info', `授权交易已发出，等待确认… <a target="_blank" rel="noopener" href="${src().explorer}/tx/${tx.hash}">查看</a>`);
+    await tx.wait();
+    setStatus('ok', '授权完成，现在可以跨链了。');
+  } catch (e) { setStatus('err', '授权失败：' + errMsg(e)); }
+  busy = false;
+  await refresh();
+}
+
+async function bridge() {
+  const amount = parseAmount();
+  busy = true; $('actionBtn').disabled = true; $('actionBtn').textContent = '正在重新报价…';
+  try {
+    const oft = new ethers.Contract(src().oft, OFT_ABI, signer);
+    const p = sendParam(amount);
+    const q = await oft.quoteSend(p, false);            // fresh quote right before sending
+    const nativeFee = q.nativeFee ?? q[0];
+    fee = { nativeFee, lzTokenFee: 0n }; renderFee();
+    $('actionBtn').textContent = '请在钱包中确认…';
+    const tx = await oft.send(p, { nativeFee, lzTokenFee: 0n }, account, { value: nativeFee });
+    const from = src(), to = dst();
+    setStatus('info', `交易已发出，等待 ${from.name} 确认…<br><a target="_blank" rel="noopener" href="${from.explorer}/tx/${tx.hash}">${from.name} 浏览器</a> · <a target="_blank" rel="noopener" href="https://layerzeroscan.com/tx/${tx.hash}">LayerZero Scan</a>`);
+    await tx.wait();
+    setStatus('ok', `✅ 已在 ${from.name} 上确认。KOR 通常 1–5 分钟到达 ${to.name}。<br>在 <a target="_blank" rel="noopener" href="https://layerzeroscan.com/tx/${tx.hash}">LayerZero Scan</a> 状态变成 Delivered 即到账。`);
+    addHist(from, to, amount, tx.hash);
+    $('amount').value = '';
+  } catch (e) { setStatus('err', '跨链失败：' + errMsg(e)); }
+  busy = false;
+  await refresh();
+}
+
+function addHist(from, to, amount, hash) {
+  const d = document.createElement('div');
+  d.className = 'item';
+  d.innerHTML = `${new Date().toLocaleTimeString()} · ${fmt(amount)} KOR · ${from.name} → ${to.name} · <a target="_blank" rel="noopener" href="https://layerzeroscan.com/tx/${hash}">追踪</a>`;
+  $('hist').prepend(d);
+}
+
+$('connectBtn').onclick = connect;
+$('actionBtn').onclick = async () => {
+  if (!account) return connect();
+  if (chainId !== src().id) return switchChain();
+  if (src().needsApprove && allowance < parseAmount()) return approve();
+  return bridge();
+};
+$('flipBtn').onclick = async () => {
+  dir = dir === 'mantle' ? 'base' : 'mantle';
+  clearStatus(); balance = 0n; fee = null;
+  await refresh();
+};
+$('maxBtn').onclick = () => {
+  if (!balance) return;
+  const v = (balance / rate) * rate;
+  $('amount').value = ethers.formatUnits(v, 18).replace(/\.0$/, '');
+  scheduleQuote(0);
+};
+$('amount').addEventListener('input', () => { clearStatus(); scheduleQuote(); });
+$('recipient').addEventListener('input', () => { scheduleQuote(); });
+
+if (window.ethereum) {
+  window.ethereum.on?.('chainChanged', onChainChanged);
+  window.ethereum.on?.('accountsChanged', async (a) => {
+    if (!a.length) { account = null; $('connectBtn').textContent = '连接钱包'; }
+    else { account = ethers.getAddress(a[0]); $('connectBtn').textContent = account.slice(0,6)+'…'+account.slice(-4); }
+    await onChainChanged();
+  });
+  // silent reconnect if already authorized
+  window.ethereum.request({ method: 'eth_accounts' }).then(a => { if (a && a.length) connect(); }).catch(() => {});
+}
+renderChains();
+updateButton();
+</script>
+</body>
+</html>
